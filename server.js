@@ -1,3 +1,7 @@
+const fs = require('fs');
+const path = require('path');
+const XLSX = require('xlsx');
+
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
@@ -106,12 +110,47 @@ These orders will be served on ${formattedDate}.
       }
     });
 
-    await transporter.sendMail({
-      from: `"Mozris Hospitality" <${process.env.EMAIL_USER}>`,
-      to: process.env.EMAIL_TO,
-      subject: `Mozris Daily Sales Summary – Pre-Orders for ${formattedDate}`,
-      text: message
-    });
+const contactSubmissions = db.collection('contactsubmissions');
+const allContacts = await contactSubmissions.find({}).toArray();
+
+// Prepare Excel rows
+const rows = allContacts.map(sub => ({
+  Name: sub.name,
+  Email: sub.email,
+  Phone: sub.phone,
+  Service: sub.service,
+  Message: sub.message,
+  SubmittedAt: new Date(sub.createdAt).toLocaleString('en-IN'),
+}));
+
+// Create or update Excel workbook
+const excelFilePath = path.join(__dirname, 'mozris_contact_submissions.xlsx');
+let workbook;
+
+if (fs.existsSync(excelFilePath)) {
+  workbook = XLSX.readFile(excelFilePath);
+  const sheet = XLSX.utils.json_to_sheet(rows, { skipHeader: false });
+  workbook.Sheets["Submissions"] = sheet;
+} else {
+  const sheet = XLSX.utils.json_to_sheet(rows);
+  workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, sheet, "Submissions");
+}
+
+XLSX.writeFile(workbook, excelFilePath);
+
+await transporter.sendMail({
+  from: `"Mozris Hospitality" <${process.env.EMAIL_USER}>`,
+  to: process.env.EMAIL_TO,
+  subject: `Mozris Daily Sales Summary – Pre-Orders for ${formattedDate}`,
+  text: message,
+  attachments: [
+    {
+      filename: 'mozris_contact_submissions.xlsx',
+      path: excelFilePath,
+    },
+  ],
+});
 
     console.log("✅ Daily summary email sent successfully");
   } catch (error) {
