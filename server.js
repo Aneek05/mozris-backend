@@ -12,7 +12,11 @@ const menuRoutes = require('./routes/menu');
 const orderRoutes = require('./routes/order');
 
 const app = express();
-app.use(cors());
+app.use(cors({
+  origin: 'https://www.mozris.com',  // ✅ Only allow your website
+  methods: ['GET', 'POST'],          // or ['*'] if needed
+  credentials: true
+}));
 app.use(express.json());
 
 // API Routes
